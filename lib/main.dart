@@ -1,121 +1,234 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:ultralytics_yolo/ultralytics_yolo.dart';
+import 'feedback_service.dart';
+import 'navigation_logic.dart';
+import 'test_logger.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: TelaDeteccao(),
+  ));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class TelaDeteccao extends StatefulWidget {
+  const TelaDeteccao({super.key});
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+  State<TelaDeteccao> createState() => _TelaDeteccaoState();
+}
+
+class _TelaDeteccaoState extends State<TelaDeteccao> {
+  final _feedback = FeedbackService();
+  final _logger = TestLogger();
+
+  Decisao? _decisao;
+  int _latenciaMs = 0;
+  bool _painelAberto = true;
+
+  String _posReal = 'nenhum';
+  String _esperada = 'livre';
+
+  @override
+  void initState() {
+    super.initState();
+    _feedback.iniciar();
+    _logger.carregar();
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
+  void _aoDetectar(List<YOLOResult> resultados) {
+    final sw = Stopwatch()..start();
+    final obstaculos = resultados
+        .map((r) => Obstaculo(
+              classe: NavigationLogic.traduzirClasse(r.className),
+              confianca: r.confidence,
+              caixa: r.normalizedBox,
+            ))
+        .toList();
+    final d = NavigationLogic.decidir(obstaculos);
+    _feedback.emitir(d);
+    sw.stop();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _decisao = d;
+      _latenciaMs = sw.elapsedMilliseconds;
     });
   }
 
+  Future<void> _registrar() async {
+    final d = _decisao;
+    if (d == null) return;
+    await _logger.registrar([
+      DateTime.now().toIso8601String(),
+      d.principal?.classe ?? 'nenhum',
+      _posReal,
+      d.principal?.zona.name ?? 'nenhum',
+      _esperada,
+      d.chave,
+      '$_latenciaMs',
+    ]);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Ensaio ${_logger.total} registrado')),
+    );
+  }
+
+  void _mostrarMetricas() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Métricas'),
+        content: Text(_logger.metricas()),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _logger.csv()));
+              Navigator.pop(context);
+            },
+            child: const Text('Copiar CSV'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _logger.limpar();
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('Limpar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _opcoes(String titulo, List<String> itens, String atual,
+      void Function(String) aoMudar) {
+    return Wrap(
+      spacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(titulo, style: const TextStyle(color: Colors.white)),
+        ...itens.map((i) => ChoiceChip(
+              label: Text(i),
+              selected: atual == i,
+              onSelected: (_) => setState(() => aoMudar(i)),
+            )),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final d = _decisao;
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Stack(
+        children: [
+          YOLOView(
+            modelPath: YOLO.defaultOfficialModel() ?? 'yolo26n',
+            task: YOLOTask.detect,
+            onResult: _aoDetectar,
+          ),
+          // Linhas das 3 regiões
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Row(
+                children: [
+                  for (int i = 0; i < 3; i++)
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white24),
+                          color: (d?.bloqueadas.contains(Zona.values[i]) ??
+                                  false)
+                              ? Colors.red.withValues(alpha: 0.25)
+                              : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Container(
+                color: Colors.black87,
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  d?.mensagem ?? 'Aguardando detecções...',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.black87,
+              padding: const EdgeInsets.all(10),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Painel de testes (${_logger.total})',
+                            style: const TextStyle(color: Colors.white)),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                              _painelAberto
+                                  ? Icons.expand_more
+                                  : Icons.expand_less,
+                              color: Colors.white),
+                          onPressed: () =>
+                              setState(() => _painelAberto = !_painelAberto),
+                        ),
+                      ],
+                    ),
+                    if (_painelAberto) ...[
+                      _opcoes(
+                          'Posição real:',
+                          ['nenhum', 'esquerda', 'centro', 'direita'],
+                          _posReal,
+                          (v) => _posReal = v),
+                      _opcoes(
+                          'Esperado:',
+                          ['livre', 'esquerda', 'direita', 'parar'],
+                          _esperada,
+                          (v) => _esperada = v),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                              onPressed: _registrar,
+                              child: const Text('Registrar ensaio')),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                              onPressed: _mostrarMetricas,
+                              child: const Text('Métricas')),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
