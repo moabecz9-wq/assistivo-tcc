@@ -28,8 +28,10 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
   int _latenciaMs = 0;
   bool _painelAberto = true;
 
+  String _classeReal = 'nenhum';
   String _posReal = 'nenhum';
   String _esperada = 'livre';
+  String _condicao = 'boa';
 
   @override
   void initState() {
@@ -39,7 +41,7 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
   }
 
   void _aoDetectar(List<YOLOResult> resultados) {
-    final sw = Stopwatch()..start();
+    final inicio = DateTime.now();
     final obstaculos = resultados
         .map((r) => Obstaculo(
               classe: NavigationLogic.traduzirClasse(r.className),
@@ -48,11 +50,9 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
             ))
         .toList();
     final d = NavigationLogic.decidir(obstaculos);
-    _feedback.emitir(d);
-    sw.stop();
-    setState(() {
-      _decisao = d;
-      _latenciaMs = sw.elapsedMilliseconds;
+    setState(() => _decisao = d);
+    _feedback.emitir(d, inicio).then((ms) {
+      if (ms != null && mounted) setState(() => _latenciaMs = ms);
     });
   }
 
@@ -61,12 +61,14 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
     if (d == null) return;
     await _logger.registrar([
       DateTime.now().toIso8601String(),
+      _classeReal,
       d.principal?.classe ?? 'nenhum',
       _posReal,
       d.principal?.zona.name ?? 'nenhum',
       _esperada,
       d.chave,
       '$_latenciaMs',
+      _condicao,
     ]);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -110,10 +112,11 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
       spacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(titulo, style: const TextStyle(color: Colors.white)),
+        Text(titulo, style: const TextStyle(color: Colors.white, fontSize: 12)),
         ...itens.map((i) => ChoiceChip(
-              label: Text(i),
+              label: Text(i, style: const TextStyle(fontSize: 12)),
               selected: atual == i,
+              visualDensity: VisualDensity.compact,
               onSelected: (_) => setState(() => aoMudar(i)),
             )),
       ],
@@ -131,7 +134,6 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
             task: YOLOTask.detect,
             onResult: _aoDetectar,
           ),
-          // Linhas das 3 regiões
           Positioned.fill(
             child: IgnorePointer(
               child: Row(
@@ -201,6 +203,11 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
                     ),
                     if (_painelAberto) ...[
                       _opcoes(
+                          'Classe real:',
+                          ['nenhum', 'pessoa', 'escada', 'objeto'],
+                          _classeReal,
+                          (v) => _classeReal = v),
+                      _opcoes(
                           'Posição real:',
                           ['nenhum', 'esquerda', 'centro', 'direita'],
                           _posReal,
@@ -210,6 +217,11 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
                           ['livre', 'esquerda', 'direita', 'parar'],
                           _esperada,
                           (v) => _esperada = v),
+                      _opcoes(
+                          'Condição:',
+                          ['boa', 'pouca_luz', 'distante', 'sobreposto'],
+                          _condicao,
+                          (v) => _condicao = v),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -221,6 +233,11 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
                               onPressed: _mostrarMetricas,
                               child: const Text('Métricas')),
                         ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Protótipo de pesquisa. Não substitui bengala ou cão-guia.',
+                        style: TextStyle(color: Colors.white54, fontSize: 11),
                       ),
                     ],
                   ],

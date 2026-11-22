@@ -24,7 +24,7 @@ sua posição aproximada (esquerda, centro ou direita) e orientar o desvio por
 3. `lib/feedback_service.dart` fala ("desvie pela esquerda", "desvie pela
    direita", "caminho livre, siga em frente") e vibra.
 4. O painel de testes grava cada ensaio em CSV (`lib/test_logger.dart`) e
-   `bin/metricas.dart` calcula as métricas da avaliação.
+   o próprio painel calcula as métricas da avaliação.
 
 ## Estrutura
 
@@ -34,10 +34,8 @@ sua posição aproximada (esquerda, centro ou direita) e orientar o desvio por
 | `lib/navigation_logic.dart` | Zonas e decisão de desvio |
 | `lib/feedback_service.dart` | Voz e vibração |
 | `lib/test_logger.dart` | Registro dos testes em CSV |
-| `bin/metricas.dart` | Cálculo das métricas |
 | `test/` | Testes automatizados da lógica |
 | `docs/` | Requisitos e estudo das tecnologias |
-| `treino/` | Montagem do dataset e treinamento da classe escada |
 | `resultados/` | CSV dos testes e métricas |
 
 ## Como executar

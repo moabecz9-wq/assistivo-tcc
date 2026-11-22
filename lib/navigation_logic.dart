@@ -17,6 +17,9 @@ class Obstaculo {
 
   double get area => caixa.width * caixa.height;
 
+  /// Piso tátil é guia de caminho, não obstáculo.
+  bool get ehGuia => classe == 'piso tátil';
+
   Zona get zona {
     final cx = caixa.center.dx;
     if (cx < 1 / 3) return Zona.esquerda;
@@ -28,11 +31,11 @@ class Obstaculo {
 class Decisao {
   final Orientacao orientacao;
   final Set<Zona> bloqueadas;
-  final Obstaculo? principal;
+  final Obstaculo? principal; // só obstáculos
+  final Obstaculo? guia; // piso tátil
 
-  const Decisao(this.orientacao, this.bloqueadas, this.principal);
+  const Decisao(this.orientacao, this.bloqueadas, this.principal, this.guia);
 
-  /// Chave usada no registro CSV.
   String get chave {
     switch (orientacao) {
       case Orientacao.desviarEsquerda:
@@ -46,6 +49,19 @@ class Decisao {
     }
   }
 
+  String get _avisoGuia {
+    final g = guia;
+    if (g == null) return '';
+    switch (g.zona) {
+      case Zona.esquerda:
+        return ', piso tátil à esquerda';
+      case Zona.direita:
+        return ', piso tátil à direita';
+      case Zona.centro:
+        return ', piso tátil à frente';
+    }
+  }
+
   String get mensagem {
     final nome = principal?.classe ?? 'obstáculo';
     switch (orientacao) {
@@ -56,21 +72,27 @@ class Decisao {
       case Orientacao.parar:
         return '$nome à frente, pare';
       case Orientacao.livre:
-        return 'caminho livre, siga em frente';
+        return 'caminho livre, siga em frente$_avisoGuia';
     }
   }
 }
 
 class NavigationLogic {
   static const double confiancaMinima = 0.5;
-  static const double areaMinima = 0.02; // ignora objetos muito distantes
-  static const double sobreposicaoMinima = 0.2; // fração da zona ocupada
+  static const double areaMinima = 0.02;
+  static const double sobreposicaoMinima = 0.2;
 
-  /// Pessoa -> "pessoa", escada -> "escada", qualquer outra coisa -> "objeto".
   static String traduzirClasse(String nome) {
     final n = nome.toLowerCase();
-    if (n == 'person') return 'pessoa';
+    if (n == 'person' || n == 'pessoa') return 'pessoa';
     if (n.contains('stair') || n.contains('escada')) return 'escada';
+    if (n.contains('tactile') ||
+        n.contains('tatil') ||
+        n.contains('tátil') ||
+        n.contains('braille') ||
+        n.contains('paving')) {
+      return 'piso tátil';
+    }
     return 'objeto';
   }
 
@@ -88,21 +110,26 @@ class NavigationLogic {
     return sobreposicao > 0 && sobreposicao / (fim - ini) >= sobreposicaoMinima;
   }
 
+  static Obstaculo? _maior(Iterable<Obstaculo> lista) {
+    Obstaculo? m;
+    for (final o in lista) {
+      if (m == null || o.area > m.area) m = o;
+    }
+    return m;
+  }
+
   static Decisao decidir(List<Obstaculo> deteccoes) {
     final validos = deteccoes
         .where((o) => o.confianca >= confiancaMinima && o.area >= areaMinima)
         .toList();
+    final obstaculos = validos.where((o) => !o.ehGuia).toList();
+    final guias = validos.where((o) => o.ehGuia);
 
     final bloqueadas = <Zona>{};
-    for (final o in validos) {
+    for (final o in obstaculos) {
       for (final z in Zona.values) {
         if (_ocupa(o.caixa, z)) bloqueadas.add(z);
       }
-    }
-
-    Obstaculo? principal;
-    for (final o in validos) {
-      if (principal == null || o.area > principal.area) principal = o;
     }
 
     Orientacao orientacao;
@@ -115,6 +142,6 @@ class NavigationLogic {
     } else {
       orientacao = Orientacao.parar;
     }
-    return Decisao(orientacao, bloqueadas, principal);
+    return Decisao(orientacao, bloqueadas, _maior(obstaculos), _maior(guias));
   }
 }
