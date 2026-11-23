@@ -130,7 +130,7 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
       body: Stack(
         children: [
           YOLOView(
-            modelPath: YOLO.defaultOfficialModel() ?? 'yolo26n',
+            modelPath: 'assets/models/obstaculos_v1.tflite',
             task: YOLOTask.detect,
             onResult: _aoDetectar,
           ),

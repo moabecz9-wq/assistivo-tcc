@@ -9,7 +9,7 @@ Sistemas, Centro Universitário Mater Dei (UNIMATER).
 ## Sobre
 
 Protótipo de aplicativo Android que usa a câmera do smartphone e visão
-computacional para identificar obstáculos (pessoa, escada e objeto), determinar
+computacional para identificar obstáculos (pessoa, escada e piso tátil), determinar
 sua posição aproximada (esquerda, centro ou direita) e orientar o desvio por
 áudio e vibração, com processamento local, em ambiente controlado.
 
@@ -48,10 +48,22 @@ Requer Flutter, Android SDK e um celular Android (minSdk 24) com depuração USB
 
 ## Métricas
 
-    dart run bin/metricas.dart resultados/testes.csv
+As métricas são calculadas no painel de testes do app (botão Métricas). O CSV dos ensaios e o resultado do treino ficam em `resultados/`.
 
 ## Licenças e atribuições
 
 - Plugin `ultralytics_yolo` e modelos YOLO: AGPL-3.0 (Ultralytics).
 - Datasets de escada: Roboflow Universe (ver `docs/TECNOLOGIAS.md` para autores e
   licenças).
+## Modelo de detecção
+
+Modelo único YOLO11n, treinado no Google Colab, com 4 classes: pessoa (person),
+escada (stairs), piso tátil de guia (go-block) e piso tátil de alerta
+(stop-block). Pessoa e escada bloqueiam a região; o piso tátil é tratado como guia
+e o de alerta gera um aviso. Resultado do treino em `resultados/metricas_treino.md`.
+
+## Datasets utilizados
+
+- Pessoas: COCO 2017 (anotações CC BY 4.0).
+- Piso tátil: Roboflow Universe, projeto `detection2-9wpxq-awkvj` (CC BY 4.0).
+- Escadas: Roboflow, projeto `stairs-lusiz-ggfgo` (verificar a licença no `data.yaml` do dataset).

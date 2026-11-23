@@ -17,8 +17,11 @@ class Obstaculo {
 
   double get area => caixa.width * caixa.height;
 
-  /// Piso tátil é guia de caminho, não obstáculo.
-  bool get ehGuia => classe == 'piso tátil';
+  /// Piso tátil (direcional ou de alerta) é guia de caminho, não obstáculo.
+  bool get ehGuia => classe == 'piso tátil' || classe == 'piso tátil de alerta';
+
+  /// Piso tátil de alerta (stop-block): pede atenção, mas não bloqueia a zona.
+  bool get ehAlerta => classe == 'piso tátil de alerta';
 
   Zona get zona {
     final cx = caixa.center.dx;
@@ -52,13 +55,14 @@ class Decisao {
   String get _avisoGuia {
     final g = guia;
     if (g == null) return '';
+    final nome = g.classe;
     switch (g.zona) {
       case Zona.esquerda:
-        return ', piso tátil à esquerda';
+        return ', $nome à esquerda';
       case Zona.direita:
-        return ', piso tátil à direita';
+        return ', $nome à direita';
       case Zona.centro:
-        return ', piso tátil à frente';
+        return ', $nome à frente';
     }
   }
 
@@ -72,6 +76,7 @@ class Decisao {
       case Orientacao.parar:
         return '$nome à frente, pare';
       case Orientacao.livre:
+        if (guia?.ehAlerta ?? false) return 'atenção$_avisoGuia';
         return 'caminho livre, siga em frente$_avisoGuia';
     }
   }
@@ -82,11 +87,15 @@ class NavigationLogic {
   static const double areaMinima = 0.02;
   static const double sobreposicaoMinima = 0.2;
 
+  /// Traduz o nome da classe do modelo para o nome falado pelo app.
+  /// Modelo atual: person, stairs, go-block, stop-block.
   static String traduzirClasse(String nome) {
     final n = nome.toLowerCase();
     if (n == 'person' || n == 'pessoa') return 'pessoa';
     if (n.contains('stair') || n.contains('escada')) return 'escada';
-    if (n.contains('tactile') ||
+    if (n == 'stop-block') return 'piso tátil de alerta';
+    if (n == 'go-block' ||
+        n.contains('tactile') ||
         n.contains('tatil') ||
         n.contains('tátil') ||
         n.contains('braille') ||
@@ -123,7 +132,7 @@ class NavigationLogic {
         .where((o) => o.confianca >= confiancaMinima && o.area >= areaMinima)
         .toList();
     final obstaculos = validos.where((o) => !o.ehGuia).toList();
-    final guias = validos.where((o) => o.ehGuia);
+    final guias = validos.where((o) => o.ehGuia).toList();
 
     final bloqueadas = <Zona>{};
     for (final o in obstaculos) {
@@ -142,6 +151,11 @@ class NavigationLogic {
     } else {
       orientacao = Orientacao.parar;
     }
-    return Decisao(orientacao, bloqueadas, _maior(obstaculos), _maior(guias));
+
+    // Se houver piso tátil de alerta, ele tem prioridade como guia a anunciar.
+    final alertas = guias.where((g) => g.ehAlerta).toList();
+    final guia = alertas.isNotEmpty ? _maior(alertas) : _maior(guias);
+
+    return Decisao(orientacao, bloqueadas, _maior(obstaculos), guia);
   }
 }
