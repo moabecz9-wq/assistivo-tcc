@@ -204,7 +204,7 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
                     if (_painelAberto) ...[
                       _opcoes(
                           'Classe real:',
-                          ['nenhum', 'pessoa', 'escada', 'objeto'],
+                          ['nenhum', 'pessoa', 'escada', 'piso tátil'],
                           _classeReal,
                           (v) => _classeReal = v),
                       _opcoes(

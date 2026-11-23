@@ -86,6 +86,10 @@ class NavigationLogic {
   static const double confiancaMinima = 0.5;
   static const double areaMinima = 0.02;
   static const double sobreposicaoMinima = 0.2;
+  static const double confiancaPessoa = 0.65;
+
+  static double _minimaDe(String classe) =>
+      classe == 'pessoa' ? confiancaPessoa : confiancaMinima;
 
   /// Traduz o nome da classe do modelo para o nome falado pelo app.
   /// Modelo atual: person, stairs, go-block, stop-block.
@@ -129,7 +133,7 @@ class NavigationLogic {
 
   static Decisao decidir(List<Obstaculo> deteccoes) {
     final validos = deteccoes
-        .where((o) => o.confianca >= confiancaMinima && o.area >= areaMinima)
+        .where((o) => o.confianca >= _minimaDe(o.classe) && o.area >= areaMinima)
         .toList();
     final obstaculos = validos.where((o) => !o.ehGuia).toList();
     final guias = validos.where((o) => o.ehGuia).toList();
