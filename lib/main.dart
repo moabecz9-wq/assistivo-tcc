@@ -23,6 +23,7 @@ class TelaDeteccao extends StatefulWidget {
 class _TelaDeteccaoState extends State<TelaDeteccao> {
   final _feedback = FeedbackService();
   final _logger = TestLogger();
+  final _estabilizador = Estabilizador();
 
   Decisao? _decisao;
   int _latenciaMs = 0;
@@ -49,7 +50,7 @@ class _TelaDeteccaoState extends State<TelaDeteccao> {
               caixa: r.normalizedBox,
             ))
         .toList();
-    final d = NavigationLogic.decidir(obstaculos);
+    final d = _estabilizador.filtrar(NavigationLogic.decidir(obstaculos));
     setState(() => _decisao = d);
     _feedback.emitir(d, inicio).then((ms) {
       if (ms != null && mounted) setState(() => _latenciaMs = ms);
